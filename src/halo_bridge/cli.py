@@ -206,6 +206,49 @@ def _get_target_config(cfg: BridgeConfig, target_name: str):
     }.get(target_name)
 
 
+def _update_config_cookie(
+    config_path: Path, platform: str, cookie_str: str, cookies: dict[str, str]
+) -> None:
+    """Update cookie in config file using string replacement to preserve comments."""
+    import re
+
+    text = config_path.read_text(encoding="utf-8")
+
+    if platform == "csdn":
+        # Replace cookie value under csdn section
+        text = re.sub(
+            r'(csdn:\s*\n\s*cookie:\s*)"[^"]*"',
+            f'\\1"{cookie_str}"',
+            text,
+        )
+    elif platform == "cnblogs":
+        text = re.sub(
+            r'(cnblogs:\s*\n\s*cookie:\s*)"[^"]*"',
+            f'\\1"{cookie_str}"',
+            text,
+        )
+        xsrf = cookies.get("XSRF-TOKEN")
+        if xsrf:
+            text = re.sub(
+                r'(xsrf_token:\s*)"[^"]*"',
+                f'\\1"{xsrf}"',
+                text,
+            )
+    elif platform == "modb":
+        text = re.sub(
+            r'(modb:\s*\n\s*authorization:\s*)"[^"]*"',
+            f'\\1"Bearer {cookies.get("token", "")}"',
+            text,
+        )
+        text = re.sub(
+            r'(cookie:\s*)"[^"]*"',
+            f'\\1"{cookie_str}"',
+            text,
+        )
+
+    config_path.write_text(text, encoding="utf-8")
+
+
 def _import_adapters() -> None:
     """Import all adapter modules to trigger registration."""
     import halo_bridge.targets.csdn  # noqa: F401
@@ -261,3 +304,97 @@ def config_list_targets() -> None:
     _import_adapters()
     for name in list_adapters():
         click.echo(f"  {name}")
+
+
+# --- login command ---
+
+LOGIN_URLS = {
+    "csdn": "https://passport.csdn.net/login",
+    "cnblogs": "https://account.cnblogs.com/signin",
+    "modb": "https://www.modb.pro/login",
+}
+
+# After login, these cookies are extracted and saved
+COOKIE_KEYS = {
+    "csdn": ["UserToken", "UserName"],
+    "cnblogs": [".CNBlogsCookie", ".Cnblogs.AspNetCore.Cookies", "XSRF-TOKEN"],
+    "modb": ["token", "userID"],
+}
+
+
+@main.command()
+@click.argument("platform", type=click.Choice(["csdn", "cnblogs", "modb"]))
+@click.option("-c", "--config", "config_path", default=None, help="Path to config file.")
+def login(platform: str, config_path: str | None) -> None:
+    """Open browser to log in to a platform and save cookies to config.
+
+    Requires playwright: pip install halo-bridge[login]
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        click.echo("Error: playwright is not installed.", err=True)
+        click.echo("Install it with: pip install halo-bridge[login]", err=True)
+        sys.exit(1)
+
+    url = LOGIN_URLS[platform]
+    click.echo(f"Opening browser for {platform} login...")
+    click.echo(f"URL: {url}")
+    click.echo("Please log in manually. The window will close automatically after login.\n")
+
+    cookies = {}
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto(url)
+
+        # Wait for login to succeed by monitoring cookies
+        click.echo("Waiting for login...", nl=False)
+
+        # Poll cookies until we find the auth cookies we need
+        required_keys = set(COOKIE_KEYS[platform])
+        max_wait = 300  # 5 minutes timeout
+        elapsed = 0
+
+        while elapsed < max_wait:
+            page.wait_for_timeout(2000)
+            elapsed += 2
+
+            all_cookies = context.cookies()
+            cookie_dict = {c["name"]: c["value"] for c in all_cookies}
+
+            found = required_keys & set(cookie_dict.keys())
+            if found:
+                click.echo(f"\n  Found: {', '.join(found)}")
+
+            if required_keys.issubset(set(cookie_dict.keys())):
+                # All required cookies found
+                for key in COOKIE_KEYS[platform]:
+                    cookies[key] = cookie_dict[key]
+                break
+
+            click.echo(".", nl=False)
+
+        browser.close()
+
+    if not cookies:
+        click.echo("\nError: Login timed out or cookies not found.", err=True)
+        sys.exit(1)
+
+    click.echo(f"\nLogin successful! Saving cookies to config...")
+
+    # Build cookie string for config
+    cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+
+    # Update config file
+    config_path_resolved = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+    if not config_path_resolved.exists():
+        click.echo(f"Error: Config file not found: {config_path_resolved}", err=True)
+        click.echo("Run 'halo-bridge config init' first.", err=True)
+        sys.exit(1)
+
+    _update_config_cookie(config_path_resolved, platform, cookie_str, cookies)
+    click.echo(f"Saved to: {config_path_resolved}")
+    click.echo(f"Cookies: {cookie_str[:80]}...")

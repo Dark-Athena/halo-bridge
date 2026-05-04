@@ -16,6 +16,9 @@ dev = [
     "pytest-httpx>=0.30",
     "ruff>=0.4",
 ]
+login = [
+    "playwright>=1.40",
+]
 
 [project.scripts]
 halo-bridge = "halo_bridge.cli:main"
