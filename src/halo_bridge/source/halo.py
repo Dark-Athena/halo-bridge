@@ -21,6 +21,7 @@ class HaloSource:
             base_url=config.base_url,
             headers={"Authorization": f"Bearer {config.token}"},
             timeout=30,
+            follow_redirects=True,
         )
 
     def fetch_article(self, slug: str) -> Article:
