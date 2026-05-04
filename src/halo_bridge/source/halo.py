@@ -48,8 +48,8 @@ class HaloSource:
             permalink = f"{self.base_url}{permalink}"
 
         # Step 4: Extract categories and tags
-        categories = self._resolve_names(spec.get("categories", []))
-        tags = self._resolve_names(spec.get("tags", []))
+        categories = self._resolve_names(spec.get("categories", []), "categories")
+        tags = self._resolve_names(spec.get("tags", []), "tags")
 
         return Article(
             title=spec.get("title", ""),
@@ -107,13 +107,24 @@ class HaloSource:
             "rawType": data.get("rawType", "markdown"),
         }
 
-    def _resolve_names(self, refs: list[str]) -> list[str]:
-        """Resolve category/tag references to display names.
-
-        Halo stores categories/tags as references (names/UUIDs).
-        For now, return them as-is since platforms accept arbitrary strings.
-        """
-        return refs
+    def _resolve_names(self, refs: list[str], resource_type: str) -> list[str]:
+        """Resolve category/tag references to display names."""
+        if not refs:
+            return []
+        names = []
+        for ref in refs:
+            try:
+                resp = self.client.get(
+                    f"/apis/content.halo.run/v1alpha1/{resource_type}/{ref}"
+                )
+                if resp.status_code == 200:
+                    display = resp.json().get("spec", {}).get("displayName", ref)
+                    names.append(display)
+                else:
+                    names.append(ref)
+            except Exception:
+                names.append(ref)
+        return names
 
     def close(self) -> None:
         self.client.close()
