@@ -13,3 +13,4 @@ venv/
 !config.example.yaml
 .ruff_cache/
 .pytest_cache/
+.claude/
