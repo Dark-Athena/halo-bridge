@@ -107,6 +107,19 @@ def sync(
         and any(t != "csdn" for t in targets)
     )
 
+    # Validate auth for all targets before doing any work
+    for target_name in targets:
+        target_cfg = _get_target_config(cfg, target_name)
+        if target_cfg is None:
+            continue
+        adapter = get_adapter(target_name)(target_cfg)
+        if hasattr(adapter, "check_auth"):
+            try:
+                adapter.check_auth()
+            except Exception as e:
+                click.echo(f"Error: {e}", err=True)
+                sys.exit(1)
+
     # Apply content transforms (fix image URLs, add copyright, etc.)
     content = apply_transforms(article, cfg, add_referrer=True)
 

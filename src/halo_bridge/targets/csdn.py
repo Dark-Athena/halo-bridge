@@ -85,6 +85,17 @@ class CsdnAdapter(PlatformAdapter):
     def __init__(self, config: CsdnConfig) -> None:
         self.config = config
 
+    def check_auth(self) -> None:
+        """Verify CSDN cookie is valid. Raises TargetError if not."""
+        url = f"{self.GET_URL}?id=0&not_article=false"
+        headers = self._signed_headers("GET", url, content_type="")
+        try:
+            resp = httpx.get(url, headers=headers, timeout=10)
+        except httpx.RequestError as e:
+            raise TargetError("csdn", f"Network error: {e}")
+        if resp.status_code in (401, 403):
+            raise TargetError("csdn", "登录已过期，请更新 config.yaml 中的 cookie")
+
     def _cookie_headers(self) -> dict[str, str]:
         """Basic headers with cookie for non-signed endpoints."""
         return {

@@ -21,6 +21,19 @@ class ModbAdapter(PlatformAdapter):
     def __init__(self, config: ModbConfig) -> None:
         self.config = config
 
+    def check_auth(self) -> None:
+        """Verify modb.pro auth is valid. Raises TargetError if not."""
+        try:
+            resp = httpx.get(
+                "https://www.modb.pro/api/knowledge/user/info",
+                headers=self._headers(),
+                timeout=10,
+            )
+        except httpx.RequestError as e:
+            raise TargetError("modb", f"Network error: {e}")
+        if resp.status_code in (401, 403):
+            raise TargetError("modb", "登录已过期，请更新 config.yaml 中的 authorization 和 cookie")
+
     def _headers(self) -> dict[str, str]:
         """Build request headers."""
         headers = {
