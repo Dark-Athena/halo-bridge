@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 # Match image URLs in markdown: ![alt](url)
 _IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+# Match image URLs in HTML: <img src="url" ...>
+_HTML_IMG_RE = re.compile(r'<img\s+[^>]*src="([^"]+)"[^>]*>', re.IGNORECASE)
 
 # CSDN API Gateway signing config (extracted from csdn-http.js / app.chunk.js)
 _CSDN_APP_KEY = "203803574"
@@ -148,40 +150,61 @@ class CsdnAdapter(PlatformAdapter):
         return cdn_url
 
     def convert_images(self, markdown_content: str) -> str:
-        """Convert all external image URLs in markdown to CSDN CDN URLs.
+        """Convert all external image URLs to CSDN CDN URLs.
 
-        Returns the markdown with URLs replaced. Images that fail to convert
+        Handles both markdown ![alt](url) and HTML <img src="url"> syntax.
+        Returns the content with URLs replaced. Images that fail to convert
         are left as-is.
         """
-        matches = list(_IMAGE_RE.finditer(markdown_content))
-        if not matches:
+        # Collect all external image URLs (both markdown and HTML)
+        url_map: dict[str, str] = {}  # old_url -> new_url
+
+        # Markdown images
+        for match in _IMAGE_RE.finditer(markdown_content):
+            url = match.group(2)
+            if not url.startswith("https://img-blog.csdnimg.cn") and url not in url_map:
+                url_map[url] = ""  # placeholder
+
+        # HTML img tags
+        for match in _HTML_IMG_RE.finditer(markdown_content):
+            url = match.group(1)
+            if not url.startswith("https://img-blog.csdnimg.cn") and url not in url_map:
+                url_map[url] = ""
+
+        if not url_map:
             return markdown_content
 
-        # Filter to only external (non-CSDN) image URLs
-        external = [
-            m for m in matches
-            if not m.group(2).startswith("https://img-blog.csdnimg.cn")
-        ]
+        # Make relative URLs absolute
+        for url in list(url_map.keys()):
+            if url.startswith("/"):
+                url_map[url] = ""  # will be converted below
 
-        if not external:
-            return markdown_content
+        logger.info("Converting %d external images to CSDN CDN...", len(url_map))
 
-        logger.info("Converting %d external images to CSDN CDN...", len(external))
-
-        result = markdown_content
+        # Convert each URL
         converted = 0
-        for match in external:
-            alt = match.group(1)
-            old_url = match.group(2)
-            new_url = self.convert_image(old_url)
+        for old_url in url_map:
+            # Make relative URLs absolute
+            full_url = old_url
+            if old_url.startswith("/"):
+                # Need base URL - extract from config or use Halo URL
+                # For now, skip relative URLs (they should have been fixed by fix_image_urls)
+                logger.debug("Skipping relative URL: %s", old_url)
+                continue
+
+            new_url = self.convert_image(full_url)
             if new_url:
-                old_md = f"![{alt}]({old_url})"
-                new_md = f"![{alt}]({new_url})"
-                result = result.replace(old_md, new_md, 1)
+                url_map[old_url] = new_url
                 converted += 1
                 logger.debug("Converted: %s -> %s", old_url, new_url)
 
-        logger.info("Converted %d/%d images to CSDN CDN", converted, len(external))
+        # Replace URLs in content
+        result = markdown_content
+        for old_url, new_url in url_map.items():
+            if new_url:
+                result = result.replace(old_url, new_url)
+
+        logger.info("Converted %d/%d images to CSDN CDN", converted, len(url_map))
         return result
 
     def _signed_headers(self, method: str, url: str, content_type: str = "application/json") -> dict[str, str]:
