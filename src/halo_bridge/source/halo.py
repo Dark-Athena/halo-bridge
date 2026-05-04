@@ -65,7 +65,7 @@ class HaloSource:
     def _find_post_by_slug(self, slug: str) -> dict:
         """Find a post by its slug using fieldSelector."""
         resp = self.client.get(
-            "/apis/content.halo.run/v1alpha1/posts",
+            "/apis/api.console.halo.run/v1alpha1/posts",
             params={"fieldSelector": f"spec.slug={slug}"},
         )
         if resp.status_code != 200:
@@ -79,7 +79,9 @@ class HaloSource:
         if not items:
             raise HaloAPIError(f"Article with slug '{slug}' not found on {self.base_url}")
 
-        return items[0]
+        # Console API wraps post under 'post' key
+        item = items[0]
+        return item.get("post", item)
 
     def _get_released_content(self, post_name: str) -> dict:
         """Get the released content of a post.
