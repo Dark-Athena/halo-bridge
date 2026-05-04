@@ -1,0 +1,28 @@
+# halo-bridge 配置文件示例
+# 复制到 ~/.halo-bridge/config.yaml 并填入你的凭据
+
+halo:
+  base_url: "https://www.darkathena.top"
+  token: "pat-xxxxxxxxxxxx"           # Halo 个人访问令牌 (Personal Access Token)
+
+csdn:
+  cookie: "UserToken=xxx; dc_sid=xxx; ..."  # 从浏览器 DevTools 复制完整 Cookie 字符串
+  image_convert_wait: 10              # CSDN 图片转存等待时间（秒）
+
+cnblogs:
+  blog_name: "darkathena"             # 博客园博客名（URL 中的名称）
+  username: "darkathena"              # 博客园用户名
+  access_token: "xxxxxxxx-xxxx-xxxx"  # MetaWebLog Access Token（非登录密码，在设置中生成）
+
+modb:
+  # 墨天轮认证信息（需从浏览器抓包获取）
+  authorization: "Bearer xxxxxx"
+  # cookie: "session=xxxxx"
+
+defaults:
+  targets: ["csdn", "cnblogs"]        # 默认同步目标
+  copyright: |
+    ---
+    > - **本文作者：** [DarkAthena](https://www.darkathena.top)
+    > - **本文链接：** [{permalink}]({permalink})
+    > - **版权声明：** 本博客所有文章除特别声明外，均采用[CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/) 许可协议。转载请注明出处
