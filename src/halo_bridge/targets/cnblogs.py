@@ -29,14 +29,14 @@ class CnblogsAdapter(PlatformAdapter):
         """Verify cnblogs cookie is valid. Raises TargetError if not."""
         try:
             resp = httpx.get(
-                "https://i.cnblogs.com/api/posts?page=1&size=1",
+                "https://i.cnblogs.com/api/users",
                 headers=self._headers(),
                 timeout=10,
             )
         except httpx.RequestError as e:
             raise TargetError("cnblogs", f"Network error: {e}")
         if resp.status_code in (401, 403):
-            raise TargetError("cnblogs", "登录已过期，请更新 config.yaml 中的 cookie 和 xsrf_token")
+            raise TargetError("cnblogs", "登录已过期，请运行 `halo-bridge login cnblogs` 更新 cookie")
 
     def _headers(self) -> dict[str, str]:
         """Build request headers with cookie and XSRF token."""
