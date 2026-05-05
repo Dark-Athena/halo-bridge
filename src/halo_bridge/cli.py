@@ -228,7 +228,7 @@ def _update_config_cookie(
             f'\\1"{cookie_str}"',
             text,
         )
-        xsrf = cookies.get("XSRF-TOKEN")
+        xsrf = cookies.get("XSRF-TOKEN", "")
         if xsrf:
             text = re.sub(
                 r'(xsrf_token:\s*)"[^"]*"',
@@ -322,7 +322,7 @@ LOGIN_URLS = {
 # After login, these cookies are extracted and saved
 COOKIE_KEYS = {
     "csdn": ["UserToken", "UserName"],
-    "cnblogs": [".CNBlogsCookie", ".Cnblogs.AspNetCore.Cookies", "XSRF-TOKEN"],
+    "cnblogs": [".CNBlogsCookie", ".Cnblogs.AspNetCore.Cookies"],
     "modb": ["token", "userID"],
 }
 
@@ -395,6 +395,15 @@ def login(platform: str, config_path: str | None) -> None:
             context.storage_state(path=str(state_file))
         except Exception:
             pass
+
+        # For cnblogs, save ALL cookies (not just required ones)
+        if platform == "cnblogs":
+            all_cookies = context.cookies()
+            cnblogs_cookies = [
+                c for c in all_cookies
+                if ".cnblogs.com" in c.get("domain", "")
+            ]
+            cookies = {c["name"]: c["value"] for c in cnblogs_cookies}
 
         browser.close()
 
