@@ -89,14 +89,18 @@ class CsdnAdapter(PlatformAdapter):
 
     def check_auth(self) -> None:
         """Verify CSDN cookie is valid. Raises TargetError if not."""
-        url = f"{self.GET_URL}?id=0&not_article=false"
-        headers = self._signed_headers("GET", url, content_type="")
+        # Use the image convert endpoint to check auth (lightweight, no side effects)
         try:
-            resp = httpx.get(url, headers=headers, timeout=10)
+            resp = httpx.post(
+                self.IMG_CONVERT_URL,
+                json={"art_id": "undefined", "imgUrl": "https://example.com/test.png", "uuid": "test"},
+                headers=self._cookie_headers(),
+                timeout=10,
+            )
         except httpx.RequestError as e:
             raise TargetError("csdn", f"Network error: {e}")
         if resp.status_code in (401, 403):
-            raise TargetError("csdn", "登录已过期，请更新 config.yaml 中的 cookie")
+            raise TargetError("csdn", "登录已过期，请运行 `halo-bridge login csdn` 更新 cookie")
 
     def _cookie_headers(self) -> dict[str, str]:
         """Basic headers with cookie for non-signed endpoints."""
