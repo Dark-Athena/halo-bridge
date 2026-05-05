@@ -347,18 +347,26 @@ def login(platform: str, config_path: str | None) -> None:
     click.echo(f"URL: {url}")
     click.echo("Please log in manually. The window will close automatically after login.\n")
 
+    # Persistent browser state directory
+    state_dir = DEFAULT_CONFIG_PATH.parent / "browser_state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_file = state_dir / f"{platform}.json"
+
     cookies = {}
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
+        # Reuse saved browser state if available
+        if state_file.exists():
+            context = browser.new_context(storage_state=str(state_file))
+            click.echo("  (Restored previous browser session)")
+        else:
+            context = browser.new_context()
         page = context.new_page()
         page.goto(url)
 
-        # Wait for login to succeed by monitoring cookies
-        click.echo("Waiting for login...", nl=False)
-
-        # Poll cookies until we find the auth cookies we need
+        # Check if already logged in
+        click.echo("Checking login status...", nl=False)
         required_keys = set(COOKIE_KEYS[platform])
         max_wait = 300  # 5 minutes timeout
         elapsed = 0
@@ -371,16 +379,22 @@ def login(platform: str, config_path: str | None) -> None:
             cookie_dict = {c["name"]: c["value"] for c in all_cookies}
 
             found = required_keys & set(cookie_dict.keys())
-            if found:
+            if found and elapsed <= 4:
+                # Only show on first check if already logged in
                 click.echo(f"\n  Found: {', '.join(found)}")
 
             if required_keys.issubset(set(cookie_dict.keys())):
-                # All required cookies found
                 for key in COOKIE_KEYS[platform]:
                     cookies[key] = cookie_dict[key]
                 break
 
             click.echo(".", nl=False)
+
+        # Save browser state for next time
+        try:
+            context.storage_state(path=str(state_file))
+        except Exception:
+            pass
 
         browser.close()
 
