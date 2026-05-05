@@ -4,6 +4,7 @@ import logging
 
 import httpx
 
+from halo_bridge.exceptions import TargetError
 from halo_bridge.models import Article, ModbConfig, SyncResult
 from halo_bridge.targets import PlatformAdapter, register_adapter
 
