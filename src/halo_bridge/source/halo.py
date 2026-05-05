@@ -69,6 +69,10 @@ class HaloSource:
             "/apis/api.console.halo.run/v1alpha1/posts",
             params={"fieldSelector": f"spec.slug={slug}"},
         )
+        if "/login" in str(resp.url):
+            raise HaloAPIError(
+                "Halo 认证失败，请更新 config.yaml 中的 token（PAT 可能已过期）"
+            )
         if resp.status_code != 200:
             raise HaloAPIError(
                 f"Failed to list posts: {resp.status_code} {resp.text}",
@@ -93,6 +97,10 @@ class HaloSource:
         resp = self.client.get(
             f"/apis/api.console.halo.run/v1alpha1/posts/{post_name}/head-content",
         )
+        if "/login" in str(resp.url):
+            raise HaloAPIError(
+                "Halo 认证失败，请更新 config.yaml 中的 token（PAT 可能已过期）"
+            )
         if resp.status_code != 200:
             raise HaloAPIError(
                 f"Failed to get content for post '{post_name}': "

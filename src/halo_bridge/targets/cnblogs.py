@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -25,43 +26,43 @@ class CnblogsAdapter(PlatformAdapter):
     def __init__(self, config: CnblogsConfig) -> None:
         self.config = config
 
-    def check_auth(self) -> None:
-        """Verify cnblogs cookie is valid. Raises TargetError if not."""
-        try:
-            resp = httpx.get(
-                "https://i.cnblogs.com/api/users",
-                headers=self._headers(),
-                timeout=10,
-            )
-        except httpx.RequestError as e:
-            raise TargetError("cnblogs", f"Network error: {e}")
+    def _create_client(self) -> httpx.Client:
+        """Create an httpx.Client with cnblogs cookies pre-loaded."""
+        return httpx.Client(
+            headers={
+                "Cookie": self.config.cookie,
+                "Content-Type": "application/json",
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/132.0.0.0 Safari/537.36"
+                ),
+                "Origin": "https://i.cnblogs.com",
+                "Referer": "https://i.cnblogs.com/articles/edit",
+            },
+            follow_redirects=False,
+            timeout=30,
+        )
+
+    def _refresh_xsrf(self, client: httpx.Client) -> None:
+        """GET the edit page to get a fresh XSRF-TOKEN, then set the header."""
+        resp = client.get("https://i.cnblogs.com/articles/edit")
         if resp.status_code in (401, 403):
             raise TargetError("cnblogs", "登录已过期，请运行 `halo-bridge login cnblogs` 更新 cookie")
-
-    def _headers(self) -> dict[str, str]:
-        """Build request headers with cookie and XSRF token."""
-        headers = {
-            "Cookie": self.config.cookie,
-            "Content-Type": "application/json",
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/132.0.0.0 Safari/537.36"
-            ),
-            "Origin": "https://i.cnblogs.com",
-            "Referer": "https://i.cnblogs.com/articles/edit",
-        }
-        xsrf = self.config.xsrf_token
-        if not xsrf:
-            # Try to extract from cookie
-            import re
-
-            m = re.search(r"XSRF-TOKEN=([^;]+)", self.config.cookie)
-            if m:
-                xsrf = m.group(1)
+        # Extract fresh XSRF-TOKEN from response cookies
+        xsrf = ""
+        for cookie in client.cookies.jar:
+            if cookie.name == "XSRF-TOKEN":
+                xsrf = cookie.value
+                break
         if xsrf:
-            headers["x-xsrf-token"] = xsrf
-        return headers
+            client.headers["x-xsrf-token"] = xsrf
+            logger.debug("Refreshed XSRF-TOKEN: %s...", xsrf[:40])
+
+    def check_auth(self) -> None:
+        """Verify cnblogs cookie is valid. Raises TargetError if not."""
+        with self._create_client() as client:
+            self._refresh_xsrf(client)
 
     def publish(self, article: Article, content: str | None = None) -> SyncResult:
         """Publish an article to cnblogs."""
@@ -113,12 +114,11 @@ class CnblogsAdapter(PlatformAdapter):
         }
 
         try:
-            resp = httpx.post(
-                self.API_URL,
-                json=payload,
-                headers=self._headers(),
-                timeout=30,
-            )
+            with self._create_client() as client:
+                self._refresh_xsrf(client)
+                resp = client.post(self.API_URL, json=payload)
+        except TargetError:
+            raise
         except httpx.RequestError as e:
             return SyncResult(target="cnblogs", success=False, error=f"Network error: {e}")
 
@@ -158,12 +158,11 @@ class CnblogsAdapter(PlatformAdapter):
 
         url = f"{self.API_URL}/{post_id}"
         try:
-            resp = httpx.patch(
-                url,
-                json=payload,
-                headers=self._headers(),
-                timeout=30,
-            )
+            with self._create_client() as client:
+                self._refresh_xsrf(client)
+                resp = client.patch(url, json=payload)
+        except TargetError:
+            raise
         except httpx.RequestError as e:
             return SyncResult(target="cnblogs", success=False, error=f"Network error: {e}")
 

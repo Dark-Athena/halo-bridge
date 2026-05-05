@@ -34,6 +34,7 @@ class ModbAdapter(PlatformAdapter):
             raise TargetError("modb", f"Network error: {e}")
         if resp.status_code in (401, 403):
             raise TargetError("modb", "登录已过期，请更新 config.yaml 中的 authorization 和 cookie")
+        # 404 is acceptable - endpoint may not exist but auth cookie is still valid
 
     def _headers(self) -> dict[str, str]:
         """Build request headers."""

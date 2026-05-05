@@ -245,8 +245,9 @@ def _update_config_cookie(
             f'\\1"{token_val}"',
             text,
         )
+        # Match modb section's cookie line (after authorization line)
         text = re.sub(
-            r'(cookie:\s*)"[^"]*"',
+            r'(modb:\s*\n\s*authorization:\s*"[^"]*"\s*\n\s*cookie:\s*)"[^"]*"',
             f'\\1"{cookie_str}"',
             text,
         )
