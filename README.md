@@ -32,15 +32,14 @@ halo:
   token: "pat-xxxxxxxxxxxx"           # Halo 个人访问令牌
 
 csdn:
-  cookie: "UserToken=xxx; ..."        # 从浏览器 DevTools 复制
+  cookie: "UserToken=xxx; ..."        # 通过 login 命令自动获取
 
 cnblogs:
-  cookie: ".CNBlogsCookie=xxx; ..."   # 从浏览器 DevTools 复制
-  xsrf_token: "CfDJ8xxxx"             # 从请求头 X-XSRF-TOKEN 获取
+  cookie: ".CNBlogsCookie=xxx; ..."   # 通过 login 命令自动获取
 
 modb:
-  authorization: "Bearer xxxxxx"      # 从浏览器抓包获取
-  cookie: "token=xxx; ..."            # 从浏览器 DevTools 复制
+  authorization: "Bearer xxxxxx"      # 通过 login 命令自动获取
+  cookie: "token=xxx; ..."            # 通过 login 命令自动获取
 
 defaults:
   targets: ["csdn", "cnblogs", "modb"]
@@ -53,11 +52,31 @@ defaults:
 
 ### 获取凭据
 
+#### 方式一：浏览器登录（推荐）
+
+需要先安装 playwright：
+
+```bash
+pip install halo-bridge[login]
+```
+
+然后使用 `login` 命令打开浏览器，手动登录后自动保存 Cookie：
+
+```bash
+halo-bridge login csdn
+halo-bridge login cnblogs
+halo-bridge login modb
+```
+
+浏览器会保持登录状态，下次登录时自动恢复会话。
+
+#### 方式二：手动复制
+
 | 平台 | 凭据 | 获取方式 |
 |------|------|----------|
 | Halo | Personal Access Token | Halo 后台 → 个人中心 → 个人令牌 |
 | CSDN | Cookie | 登录 CSDN → F12 → Application → Cookies → 复制完整字符串 |
-| 博客园 | Cookie + XSRF Token | 登录博客园 → F12 → Network → 随便发一篇文章 → 从请求头复制 |
+| 博客园 | Cookie | 登录博客园 → F12 → Application → Cookies → 复制完整字符串 |
 | 墨天轮 | Authorization + Cookie | 登录墨天轮 → F12 → Network → 保存草稿 → 从请求头复制 |
 
 ## 使用
@@ -66,7 +85,7 @@ defaults:
 
 ```bash
 # 同步到所有默认目标
-halo-bridge sync "your-article-slug" --to csdn,cnblogs,modb -c config.yaml
+halo-bridge sync "your-article-slug" --to csdn,cnblogs,modb
 
 # 使用完整 URL
 halo-bridge sync "https://your-blog.com/archives/my-post" --to csdn,cnblogs
@@ -79,6 +98,17 @@ halo-bridge sync "your-article-slug" --to csdn,cnblogs --dry-run
 
 # 跳过 CSDN 图片代理（直接用源站图片链接）
 halo-bridge sync "your-article-slug" --to cnblogs --no-csdn-proxy
+
+# 指定配置文件路径（默认 ~/.halo-bridge/config.yaml）
+halo-bridge sync "your-article-slug" --to csdn -c /path/to/config.yaml
+```
+
+### 浏览器登录
+
+```bash
+halo-bridge login csdn      # 登录 CSDN 并保存 Cookie
+halo-bridge login cnblogs   # 登录博客园并保存 Cookie
+halo-bridge login modb      # 登录墨天轮并保存 Cookie
 ```
 
 ### 其他命令
@@ -143,7 +173,7 @@ ruff check .
 
 ## 注意事项
 
-- CSDN、博客园、墨天轮的 Cookie/Token 会过期，需要定期更新
+- Cookie/Token 会过期，过期后重新运行 `halo-bridge login <平台>` 即可
 - CSDN API 网关签名算法从 CSDN 前端 JS 逆向获得，如果 CSDN 更新可能需要重新提取
-- 博客园使用 REST API（`postType: 2`）发布到"文章"分类，旧的 MetaWebLog XML-RPC 只能发到"随笔"
+- 博客园使用 REST API（`postType: 2`）发布到"文章"分类，XSRF-TOKEN 会在每次请求前自动刷新
 - 墨天轮 API 未公开文档，通过抓包逆向实现
