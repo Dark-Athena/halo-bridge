@@ -211,6 +211,7 @@ def _update_config_cookie(
 ) -> None:
     """Update cookie in config file using string replacement to preserve comments."""
     import re
+    from urllib.parse import unquote
 
     text = config_path.read_text(encoding="utf-8")
 
@@ -235,9 +236,13 @@ def _update_config_cookie(
                 text,
             )
     elif platform == "modb":
+        # token cookie is URL-encoded, decode it for Authorization header
+        token_val = unquote(cookies.get("token", ""))
+        if not token_val.startswith("Bearer "):
+            token_val = f"Bearer {token_val}"
         text = re.sub(
             r'(modb:\s*\n\s*authorization:\s*)"[^"]*"',
-            f'\\1"Bearer {cookies.get("token", "")}"',
+            f'\\1"{token_val}"',
             text,
         )
         text = re.sub(
